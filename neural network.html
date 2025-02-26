@@ -23,17 +23,17 @@
 		}
 		td{
 			text-align:center;
-			width:calc(100%/9);
+			width:min(40px,calc(100%/9));
 			height:40px;
 		}
 		#shwSamples{
-			display:none:
+			display:none;
 		}
 	</style>
 </head>
 <body>
 	Draw a digit (0-9) and let the AI predict<br>
-	<canvas id=cvs width="280" height="280"></canvas><br>
+	<canvas id=cvs width=280 height=280></canvas><br>
 	<div id=cont>
 		<button onclick='ctx.fillStyle="#000";ctx.fillRect(0,0,280,280);scs.getContext("2d").fillRect(0,0,280,280);'>Clear</button><br>
 		<button id=predictBtn>Predict</button><br>
@@ -43,13 +43,14 @@
 	</div>
 	<h2>Prediction:<span id=res>None</span></h2>
 	<fieldset><table border=1><tr><td id=conf0></td><td id=conf1></td><td id=conf2></td><td id=conf3></td><td id=conf4></td><td id=conf5></td><td id=conf6></td><td id=conf7></td><td id=conf8></td><td id=conf9></td></tr></table></fieldset>
-	<input type=checkbox onchange="shwSamples.style.display=this.checked?'':'none';displaySample();">View Samples</input><br>
+	<input type=checkbox onchange="shwSamples.style.display=this.checked?'block':'none';displaySample();">View Samples</input><br>
 	<div id=shwSamples>
 		<button onclick="splN=Math.max(splN-1,0);displaySample();"><</button>
 		<button onclick="splN=Math.min(splN+1,trainingData.length-1);displaySample();">></button>
+		<button onclick="displaySample(cvs);">Draw Sample</button>
 		<div id=splLabel></div>
 	</div>
-	<canvas id=scs width="280" height="280"></canvas>
+	<canvas id=scs width=280 height=280></canvas>
 	<script src="training_data.json"></script>
 	<script src="wandb.json"></script>
 	<script>
@@ -57,35 +58,37 @@ const ctx=cvs.getContext("2d");
 ctx.fillStyle="#000";
 ctx.fillRect(0,0,280,280);
 let drawing=false;
-const inputSize=784
-const hiddenSize=128;
 const outputSize=10;
-const learningRate=0.02;
-let ep=0;
-let splN=0;
-function randomMatrix(rows,cols){
-	return Array.from({length:rows},()=>Array.from({length:cols},()=>Math.random()*2-1));
+const learnRate=0.0001;
+let ep=0,splN=0;
+function randomMatrix(x,y){
+	let scale=Math.sqrt(1/y);
+	return Array.from({length:x},()=>Array.from({length:y},()=>(Math.random()*2-1)*scale));
 }
-let weights1=randomMatrix(hiddenSize,inputSize);
-let weights2=randomMatrix(outputSize,hiddenSize);
-let bias1=new Array(hiddenSize).fill(0);
-let bias2=new Array(outputSize).fill(0);
+let w1=randomMatrix(128,784);
+let w2=randomMatrix(outputSize,128);
+let b1=new Array(128).fill(0);
+let b2=new Array(outputSize).fill(0);
 let trainingData;
 async function fetctdata(){
-	//let wandb=await fetch("wandb.json",{headers:{"Content-Type":"application/json","Accept":"application/json"}});
-	//let td=await fetch("training_data.json",{headers:{"Content-Type":"application/json","Accept":"application/json"}});
-	let d=wandb//await wandb.json();
-	let s=td//await td.json();
-	weights1=d.w1;
-	weights2=d.w2;
-	bias1=d.b1;
-	bias2=d.b2;
-	trainingData=s;
+	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
+	let d=await wandb.json();
+	trainingData=await td.json();
+	w1=d.w1;
+	w2=d.w2;
+	b1=d.b1;
+	b2=d.b2;
 }
-fetctdata()
+fetctdata();
 // activation
 function sigmoid(x){
 	return 1/(1+Math.exp(-x));
+}
+function relu(x){
+	return x>0?x:0;
+}
+function reluDeriv(x){
+	return x>0?1:0;
 }
 function softmax(arr){
 	let exp=arr.map(Math.exp);
@@ -96,22 +99,22 @@ function matMul(vec,ws){
 	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j],0));
 }
 function predict(input){
-	let hidden=matMul(input,weights1).map((v,i)=>sigmoid(v+bias1[i]));
-	let output=matMul(hidden,weights2).map((v,i)=>sigmoid(v+bias2[i]));
+	let hidden=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
+	let output=matMul(hidden,w2).map((v,i)=>v+b2[i]);
 	return softmax(output);
 }
 // training
 function train(input,label){
-	let hidden=matMul(input,weights1).map((v,i)=>sigmoid(v+bias1[i]));
-	let output=matMul(hidden,weights2).map((v,i)=>sigmoid(v+bias2[i]));
+	let hidden=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
+	let output=softmax(matMul(hidden,w2).map((v,i)=>v+b2[i]));
 	let target=new Array(outputSize).fill(0);
 	target[+label]=1;
 	let outputError=output.map((o,i)=>o-target[i]);
-	let hiddenError=matMul(outputError,transpose(weights2));
-	weights2=adjustWeights(weights2,outputError,hidden,learningRate);
-	weights1=adjustWeights(weights1,hiddenError,input,learningRate);
-	bias2=bias2.map((b,i)=>b-learningRate*outputError[i]);
-	bias1=bias1.map((b,i)=>b-learningRate*hiddenError[i]);
+	let hiddenError=matMul(outputError,transpose(w2)).map((h,i)=>h*reluDeriv(hidden[i]));
+	w2=adjustWeights(w2,outputError,hidden,learnRate);
+	w1=adjustWeights(w1,hiddenError,input,learnRate);
+	b2=b2.map((b,i)=>b-learnRate*outputError[i]);
+	b1=b1.map((b,i)=>b-learnRate*hiddenError[i]);
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
@@ -127,21 +130,10 @@ function trainLoop(){
 	if(doTrain.checked){
 		trainNetwork();
 		setTimeout(trainLoop);
+		if(ep%5<1)predictBtn.click();
 	}
 	epochs.innerText=ep+" iterations";
 }
-updWaB.onclick=function(){
-	let link=document.createElement("a");
-	link.href=URL.createObjectURL(new Blob([JSON.stringify({
-		w1:weights1,
-		w2:weights2,
-		b1:bias1,
-		b2:bias2
-	})],{type:"text/plain"}));
-	link.download="wandb.json";
-	link.click();
-	URL.revokeObjectURL(link.href);
-};
 ["touchstart","mousedown"].forEach(v=>cvs.addEventListener(v,e=>drawing=true));
 ["mouseup","mouseleave","touchend","touchcancel"].forEach((v,j)=>cvs.addEventListener(v,e=>drawing=false));
 ["touchmove","mousemove"].forEach((v,i)=>cvs.addEventListener(v,e=>draw(e,i)));
@@ -153,21 +145,20 @@ function draw(e,t){
 	ctx.arc(tg.pageX-cvs.offsetLeft,tg.pageY-cvs.offsetTop,10,0,Math.PI*2);
 	ctx.fill();
 }
-function seeWhatISee(px){
-	let cx=scs.getContext("2d");
+function seeWhatISee(px,c=scs){
+	let cx=c.getContext("2d");
 	cx.fillStyle="#000";
 	cx.fillRect(0,0,280,280);
 	for(let i=0;i<784;i++){
-		let x=i%28;
-		let y=i/28|0;
+		let x=i%28,y=i/28|0;
 		let shade=Math.round(px[i]*255).toString(16).padStart(2,0);
 		cx.fillStyle="#"+shade.repeat(3);
 		cx.fillRect(x*10,y*10,(x+1)*10,(y+1)*10);
 	}
 }
-function displaySample(){
+function displaySample(c){
 	let data=trainingData[splN];
-	seeWhatISee(data.i);
+	seeWhatISee(data.i,c);
 	splLabel.innerText=data.l;
 }
 function training(act,inp){
@@ -178,6 +169,18 @@ function training(act,inp){
 		break;
 	}
 }
+updWaB.onclick=function(){
+	let link=document.createElement("a");
+	link.href=URL.createObjectURL(new Blob([JSON.stringify({
+		w1:w1,
+		w2:w2,
+		b1:b1,
+		b2:b2
+	})],{type:"text/plain"}));
+	link.download="wandb.json";
+	link.click();
+	URL.revokeObjectURL(link.href);
+}
 predictBtn.onclick=_=>{
 	let imgData=ctx.getImageData(0,0,280,280),gs=[];
 	for(let y=0;y<28;y++)for(let x=0;x<28;x++){
@@ -187,14 +190,15 @@ predictBtn.onclick=_=>{
 	let o=predict(gs);
 	o.forEach((e,i)=>{
 		let par=document.getElementById("conf"+i);
-		par.innerText=Math.round(e*1e4)/100;
+		let p=3;
+		par.innerText=Math.round(e*10**(p+2))/10**p;
 		par.style.opacity=(1+3*e)/4;
 	});
 	res.innerText=o.indexOf(Math.max(...o));
 	seeWhatISee(gs);
 }
 addBtn.onclick=_=>{
-	let label=prompt("data label?");
+	let label=prompt("data label?")||"";
 	if(!label.trim())return;
 	let conf=confirm("add data?");
 	if(conf){
