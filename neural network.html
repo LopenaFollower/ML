@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport"content="width=device-width,initial-scale=1">
+	<title>Neural Network</title>
+	<style>
+		#cvs{
+			border:2px solid #000;
+		}
+		#cont{
+			padding-left:5px;
+		}
+		button{
+			margin-top:7px;
+			padding:6px;
+			font-size:14px;
+		}
+		table{
+			border-collapse:collapse;
+			table-layout:fixed;
+			border-color:#eee;
+			width:100%;
+		}
+		td{
+			text-align:center;
+			width:calc(100%/9);
+			height:40px;
+		}
+	</style>
+</head>
+<body>
+	Draw a digit (0-9) and let the AI predict
+	<canvas id=cvs width="280" height="280"></canvas><br>
+	<div id=cont>
+		<button onclick='ctx.fillStyle="#000";ctx.fillRect(0,0,280,280);scs.getContext("2d").fillRect(0,0,280,280);'>Clear</button><br>
+		<button id=predictBtn>Predict</button><br>
+		<button id=addBtn>New data</button><br>
+		<input type=checkbox id=doTrain onchange="trainLoop()">Train</input>(<span id=epochs></span>)<br>
+		<button id=updWaB>Export W & B</button>
+	</div>
+	<h2>Prediction:<span id=res>None</span></h2>
+	<fieldset><table border=1><tr><td id=conf0></td><td id=conf1></td><td id=conf2></td><td id=conf3></td><td id=conf4></td><td id=conf5></td><td id=conf6></td><td id=conf7></td><td id=conf8></td><td id=conf9></td></tr></table></fieldset>
+	<canvas id=scs width="280" height="280"></canvas>
+	<script>
+const ctx=cvs.getContext("2d");
+ctx.fillStyle="#000";
+ctx.fillRect(0,0,280,280);
+let drawing=false;
+const inputSize=784
+const hiddenSize=128;
+const outputSize=10;
+const learningRate=0.02;
+let ep=0;
+function randomMatrix(rows,cols){
+	return Array.from({length:rows},()=>Array.from({length:cols},()=>Math.random()*2-1));
+}
+let weights1=randomMatrix(hiddenSize,inputSize);
+let weights2=randomMatrix(outputSize,hiddenSize);
+let bias1=new Array(hiddenSize).fill(0);
+let bias2=new Array(outputSize).fill(0);
+let trainingData;
+async function fetctdata(){
+	let wandb=await fetch("wandb.json");
+	let td=await fetch("training_data.json");
+	let d=await wandb.json();
+	let s=await td.json();
+	weights1=d.w1;
+	weights2=d.w2;
+	bias1=d.b1;
+	bias2=d.b2;
+	trainingData=s;
+}
+fetctdata()
+// activation
+function sigmoid(x){
+	return 1/(1+Math.exp(-x));
+}
+function softmax(arr){
+	let exp=arr.map(Math.exp);
+	let sum=exp.reduce((a,b)=>a+b);
+	return exp.map(v=>v/sum);
+}
+function matMul(vec,ws){
+	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j],0));
+}
+function predict(input){
+	let hidden=matMul(input,weights1).map((v,i)=>sigmoid(v+bias1[i]));
+	let output=matMul(hidden,weights2).map((v,i)=>sigmoid(v+bias2[i]));
+	return softmax(output);
+}
+// training
+function train(input,label){
+	let hidden=matMul(input,weights1).map((v,i)=>sigmoid(v+bias1[i]));
+	let output=matMul(hidden,weights2).map((v,i)=>sigmoid(v+bias2[i]));
+	let target=new Array(outputSize).fill(0);
+	target[+label]=1;
+	let outputError=output.map((o,i)=>o-target[i]);
+	let hiddenError=matMul(outputError,transpose(weights2));
+	weights2=adjustWeights(weights2,outputError,hidden,learningRate);
+	weights1=adjustWeights(weights1,hiddenError,input,learningRate);
+}
+function transpose(mat){
+	return mat[0].map((_,i)=>mat.map(r=>r[i]));
+}
+function adjustWeights(w,e,l,lr){
+	return w.map((r,i)=>r.map((w,j)=>w-lr*e[i]*l[j]));
+}
+function trainNetwork(){
+	for(let i=0;i<trainingData.length;i++)train(trainingData[i].i,trainingData[i].l);
+	ep++;
+}
+function trainLoop(){
+	if(doTrain.checked){
+		trainNetwork();
+		setTimeout(trainLoop);
+	}
+	epochs.innerText=ep+" iterations";
+}
+updWaB.onclick=function(){
+	let link=document.createElement("a");
+	link.href=URL.createObjectURL(new Blob([JSON.stringify({
+		w1:weights1,
+		w2:weights2,
+		b1:bias1,
+		b2:bias2
+	})],{type:"text/plain"}));
+	link.download="wandb.json";
+	link.click();
+	URL.revokeObjectURL(link.href);
+};
+["touchstart","mousedown"].forEach(v=>cvs.addEventListener(v,e=>drawing=true));
+["mouseup","touchend","touchcancel"].forEach((v,j)=>cvs.addEventListener(v,e=>drawing=false));
+["touchmove","mousemove"].forEach((v,i)=>cvs.addEventListener(v,e=>draw(e,i)));
+function draw(e,t){
+	if(!drawing)return;
+	let tg=t?e:e.targetTouches.length?e.targetTouches.item(0):e.touches.item(0);
+	ctx.fillStyle="#fff";
+	ctx.beginPath();
+	ctx.arc(tg.pageX-cvs.offsetLeft,tg.pageY-cvs.offsetTop,10,0,Math.PI*2);
+	ctx.fill();
+}
+function seeWhatISee(px){
+	let cx=scs.getContext("2d");
+	cx.fillStyle="#000";
+	cx.fillRect(0,0,280,280);
+	for(let i=0;i<784;i++){
+		let x=i%28;
+		let y=i/28|0;
+		let shade=Math.round(px[i]*255).toString(16).padStart(2,0);
+		cx.fillStyle="#"+shade.repeat(3);
+		cx.fillRect(x*10,y*10,(x+1)*10,(y+1)*10);
+	}
+}
+function training(act,inp){
+	switch(act){
+	case"add":
+		let obj={l:inp[1],i:inp[0]};
+		navigator.clipboard.writeText(JSON.stringify(obj));
+		break;
+	}
+}
+predictBtn.onclick=_=>{
+	let imgData=ctx.getImageData(0,0,280,280),gs=[];
+	for(let y=0;y<28;y++)for(let x=0;x<28;x++){
+		let b=imgData.data[11200*y+40*x]/255;
+		gs.push(b);
+	}
+	let o=predict(gs);
+	o.forEach((e,i)=>{
+		let par=document.getElementById("conf"+i);
+		par.innerText=Math.round(e*1e4)/100;
+		par.style.opacity=(1+3*e)/4;
+	});
+	res.innerText=o.indexOf(Math.max(...o));
+	seeWhatISee(gs);
+}
+addBtn.onclick=_=>{
+	let label=prompt("data label?");
+	if(!label.trim())return;
+	let conf=confirm("add data?");
+	if(conf){
+		let imgData=ctx.getImageData(0,0,280,280),gs=[];
+		for(let y=0;y<28;y++)for(let x=0;x<28;x++){
+			let b=imgData.data[11200*y+40*x]/255;
+			gs.push(b);
+		}
+		training("add",[gs,label]);
+	}
+}
+	</script>
+</body>
+</html>
