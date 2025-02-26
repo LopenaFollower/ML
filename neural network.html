@@ -26,10 +26,13 @@
 			width:calc(100%/9);
 			height:40px;
 		}
+		#shwSamples{
+			display:none:
+		}
 	</style>
 </head>
 <body>
-	Draw a digit (0-9) and let the AI predict
+	Draw a digit (0-9) and let the AI predict<br>
 	<canvas id=cvs width="280" height="280"></canvas><br>
 	<div id=cont>
 		<button onclick='ctx.fillStyle="#000";ctx.fillRect(0,0,280,280);scs.getContext("2d").fillRect(0,0,280,280);'>Clear</button><br>
@@ -40,7 +43,15 @@
 	</div>
 	<h2>Prediction:<span id=res>None</span></h2>
 	<fieldset><table border=1><tr><td id=conf0></td><td id=conf1></td><td id=conf2></td><td id=conf3></td><td id=conf4></td><td id=conf5></td><td id=conf6></td><td id=conf7></td><td id=conf8></td><td id=conf9></td></tr></table></fieldset>
+	<input type=checkbox onchange="shwSamples.style.display=this.checked?'':'none';displaySample();">View Samples</input><br>
+	<div id=shwSamples>
+		<button onclick="splN=Math.max(splN-1,0);displaySample();"><</button>
+		<button onclick="splN=Math.min(splN+1,trainingData.length-1);displaySample();">></button>
+		<div id=splLabel></div>
+	</div>
 	<canvas id=scs width="280" height="280"></canvas>
+	<script src="training_data.json"></script>
+	<script src="wandb.json"></script>
 	<script>
 const ctx=cvs.getContext("2d");
 ctx.fillStyle="#000";
@@ -51,6 +62,7 @@ const hiddenSize=128;
 const outputSize=10;
 const learningRate=0.02;
 let ep=0;
+let splN=0;
 function randomMatrix(rows,cols){
 	return Array.from({length:rows},()=>Array.from({length:cols},()=>Math.random()*2-1));
 }
@@ -60,10 +72,10 @@ let bias1=new Array(hiddenSize).fill(0);
 let bias2=new Array(outputSize).fill(0);
 let trainingData;
 async function fetctdata(){
-	let wandb=await fetch("wandb.json");
-	let td=await fetch("training_data.json");
-	let d=await wandb.json();
-	let s=await td.json();
+	//let wandb=await fetch("wandb.json",{headers:{"Content-Type":"application/json","Accept":"application/json"}});
+	//let td=await fetch("training_data.json",{headers:{"Content-Type":"application/json","Accept":"application/json"}});
+	let d=wandb//await wandb.json();
+	let s=td//await td.json();
 	weights1=d.w1;
 	weights2=d.w2;
 	bias1=d.b1;
@@ -77,7 +89,7 @@ function sigmoid(x){
 }
 function softmax(arr){
 	let exp=arr.map(Math.exp);
-	let sum=exp.reduce((a,b)=>a+b);
+	let sum=exp.reduce((a,b)=>a+b,0);
 	return exp.map(v=>v/sum);
 }
 function matMul(vec,ws){
@@ -98,6 +110,8 @@ function train(input,label){
 	let hiddenError=matMul(outputError,transpose(weights2));
 	weights2=adjustWeights(weights2,outputError,hidden,learningRate);
 	weights1=adjustWeights(weights1,hiddenError,input,learningRate);
+	bias2=bias2.map((b,i)=>b-learningRate*outputError[i]);
+	bias1=bias1.map((b,i)=>b-learningRate*hiddenError[i]);
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
@@ -129,7 +143,7 @@ updWaB.onclick=function(){
 	URL.revokeObjectURL(link.href);
 };
 ["touchstart","mousedown"].forEach(v=>cvs.addEventListener(v,e=>drawing=true));
-["mouseup","touchend","touchcancel"].forEach((v,j)=>cvs.addEventListener(v,e=>drawing=false));
+["mouseup","mouseleave","touchend","touchcancel"].forEach((v,j)=>cvs.addEventListener(v,e=>drawing=false));
 ["touchmove","mousemove"].forEach((v,i)=>cvs.addEventListener(v,e=>draw(e,i)));
 function draw(e,t){
 	if(!drawing)return;
@@ -150,6 +164,11 @@ function seeWhatISee(px){
 		cx.fillStyle="#"+shade.repeat(3);
 		cx.fillRect(x*10,y*10,(x+1)*10,(y+1)*10);
 	}
+}
+function displaySample(){
+	let data=trainingData[splN];
+	seeWhatISee(data.i);
+	splLabel.innerText=data.l;
 }
 function training(act,inp){
 	switch(act){
