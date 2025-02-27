@@ -4,7 +4,7 @@
 	<meta name="viewport"content="width=device-width,initial-scale=1">
 	<title>Neural Network</title>
 	<style>
-		#cvs{
+		canvas{
 			border:2px solid #000;
 		}
 		#cont{
@@ -18,7 +18,6 @@
 		table{
 			border-collapse:collapse;
 			table-layout:fixed;
-			border-color:#eee;
 			width:100%;
 		}
 		td{
@@ -42,7 +41,7 @@
 		<button id=updWaB>Export W & B</button>
 	</div>
 	<h2>Prediction:<span id=res>None</span></h2>
-	<fieldset><table border=1><tr><td id=conf0></td><td id=conf1></td><td id=conf2></td><td id=conf3></td><td id=conf4></td><td id=conf5></td><td id=conf6></td><td id=conf7></td><td id=conf8></td><td id=conf9></td></tr></table></fieldset>
+	<table border=1><tr><td id=conf0></td><td id=conf1></td><td id=conf2></td><td id=conf3></td><td id=conf4></td><td id=conf5></td><td id=conf6></td><td id=conf7></td><td id=conf8></td><td id=conf9></td></tr></table>
 	<input type=checkbox onchange="shwSamples.style.display=this.checked?'block':'none';displaySample();">View Samples</input><br>
 	<div id=shwSamples>
 		<button onclick="splN=Math.max(splN-1,0);displaySample();"><</button>
@@ -51,24 +50,25 @@
 		<div id=splLabel></div>
 	</div>
 	<canvas id=scs width=280 height=280></canvas>
-	<script src="training_data.json"></script>
-	<script src="wandb.json"></script>
 	<script>
 const ctx=cvs.getContext("2d");
 ctx.fillStyle="#000";
 ctx.fillRect(0,0,280,280);
 let drawing=false;
 const outputSize=10;
+const hZ=[128,64];
 const learnRate=0.0001;
 let ep=0,splN=0;
 function randomMatrix(x,y){
 	let scale=Math.sqrt(1/y);
 	return Array.from({length:x},()=>Array.from({length:y},()=>(Math.random()*2-1)*scale));
 }
-let w1=randomMatrix(128,784);
-let w2=randomMatrix(outputSize,128);
-let b1=new Array(128).fill(0);
-let b2=new Array(outputSize).fill(0);
+let w1=randomMatrix(hZ[0],784);
+let w2=randomMatrix(hZ[1],hZ[0]);
+let w3=randomMatrix(outputSize,hZ[1]);
+let b1=new Array(hZ[0]).fill(0);
+let b2=new Array(hZ[1]).fill(0);
+let b3=new Array(outputSize).fill(0);
 let trainingData;
 async function fetctdata(){
 	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
@@ -76,8 +76,18 @@ async function fetctdata(){
 	trainingData=await td.json();
 	w1=d.w1;
 	w2=d.w2;
+	w3=d.w3;
 	b1=d.b1;
 	b2=d.b2;
+	b3=d.b3;
+}
+function resetWandB(){
+	w1=randomMatrix(hZ[0],784);
+	w2=randomMatrix(hZ[1],hZ[0]);
+	w3=randomMatrix(outputSize,hZ[1]);
+	b1=new Array(hZ[0]).fill(0);
+	b2=new Array(hZ[1]).fill(0);
+	b3=new Array(outputSize).fill(0);
 }
 fetctdata();
 // activation
@@ -99,28 +109,36 @@ function matMul(vec,ws){
 	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j],0));
 }
 function predict(input){
-	let hidden=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
-	let output=matMul(hidden,w2).map((v,i)=>v+b2[i]);
-	return softmax(output);
+	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
+	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i]));
+	let o=matMul(h2,w3).map((v,i)=>v+b3[i]);
+	return softmax(o);
 }
 // training
 function train(input,label){
-	let hidden=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
-	let output=softmax(matMul(hidden,w2).map((v,i)=>v+b2[i]));
+	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i])); 
+	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i])); 
+	let out=softmax(matMul(h2,w3).map((v,i)=>v+b3[i]));
 	let target=new Array(outputSize).fill(0);
 	target[+label]=1;
-	let outputError=output.map((o,i)=>o-target[i]);
-	let hiddenError=matMul(outputError,transpose(w2)).map((h,i)=>h*reluDeriv(hidden[i]));
-	w2=adjustWeights(w2,outputError,hidden,learnRate);
-	w1=adjustWeights(w1,hiddenError,input,learnRate);
-	b2=b2.map((b,i)=>b-learnRate*outputError[i]);
-	b1=b1.map((b,i)=>b-learnRate*hiddenError[i]);
+	let outErr=out.map((o,i)=>o-target[i]);
+	let h2Err=matMul(outErr,transpose(w3)).map((h,i)=>h*reluDeriv(h2[i])); 
+	let h1Err=matMul(h2Err,transpose(w2)).map((h,i)=>h*reluDeriv(h1[i])); 
+	adjustWeights(w3,outErr,h2);
+	adjustWeights(w2,h2Err,h1);
+	adjustWeights(w1,h1Err,input);
+	adjustBiases(b3,outErr);
+	adjustBiases(b2,h2Err);
+	adjustBiases(b1,h1Err);
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
 }
-function adjustWeights(w,e,l,lr){
-	return w.map((r,i)=>r.map((w,j)=>w-lr*e[i]*l[j]));
+function adjustWeights(ws,e,l){
+	ws=ws.map((r,i)=>r.map((w,j)=>w-learnRate*e[i]*l[j]));
+}
+function adjustBiases(bs,e){
+	bs=bs.map((b,i)=>b-learnRate*e[i]);
 }
 function trainNetwork(){
 	for(let i=0;i<trainingData.length;i++)train(trainingData[i].i,trainingData[i].l);
@@ -151,9 +169,8 @@ function seeWhatISee(px,c=scs){
 	cx.fillRect(0,0,280,280);
 	for(let i=0;i<784;i++){
 		let x=i%28,y=i/28|0;
-		let shade=Math.round(px[i]*255).toString(16).padStart(2,0);
-		cx.fillStyle="#"+shade.repeat(3);
-		cx.fillRect(x*10,y*10,(x+1)*10,(y+1)*10);
+		cx.fillStyle="#"+Math.round(px[i]*255).toString(16).padStart(2,0).repeat(3);
+		cx.fillRect(x*10,y*10,++x*10,++y*10);
 	}
 }
 function displaySample(c){
@@ -171,12 +188,7 @@ function training(act,inp){
 }
 updWaB.onclick=function(){
 	let link=document.createElement("a");
-	link.href=URL.createObjectURL(new Blob([JSON.stringify({
-		w1:w1,
-		w2:w2,
-		b1:b1,
-		b2:b2
-	})],{type:"text/plain"}));
+	link.href=URL.createObjectURL(new Blob([JSON.stringify({w1,w2,w3,b1,b2,b3})],{type:"text/plain"}));
 	link.download="wandb.json";
 	link.click();
 	URL.revokeObjectURL(link.href);
