@@ -79,7 +79,7 @@ let b3=emptyArr(hZ[2]);
 let b4=emptyArr(outputSize);
 let trainingData;
 async function fetctdata(){
-	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
+	let wandb=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/wandb.json"),td=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/training_data.json");
 	let d=await wandb.json();
 	trainingData=await td.json();
 	w1=d.w1;w2=d.w2;w3=d.w3;w4=d.w4;b1=d.b1;b2=d.b2;b3=d.b3;b4=d.b4;
@@ -107,11 +107,11 @@ function reluDeriv(x){
 }
 function softmax(arr){
 	let exp=arr.map(Math.exp);
-	let sum=exp.reduce((a,b)=>a+b,0);
+	let sum=exp.reduce((a,b)=>a+b);
 	return exp.map(v=>v/sum);
 }
 function matMul(vec,ws){
-	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j],0));
+	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j]));
 }
 function predict(input){
 	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
@@ -122,9 +122,9 @@ function predict(input){
 }
 // training
 function train(input,label){
-	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
-	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i]));
-	let h3=matMul(h2,w3).map((v,i)=>relu(v+b3[i]));
+	let h1=applyDropout(matMul(input,w1).map((v,i)=>relu(v+b1[i])),.2);
+	let h2=applyDropout(matMul(h1,w2).map((v,i)=>relu(v+b2[i])),.2);
+	let h3=applyDropout(matMul(h2,w3).map((v,i)=>relu(v+b3[i])),.2);
 	let out=softmax(matMul(h3,w4).map((v,i)=>v+b4[i]));
 	let tg=emptyArr(outputSize);
 	tg[+label]=1;
@@ -140,6 +140,9 @@ function train(input,label){
 	b3=adjustBiases(b3,h3Err);
 	b2=adjustBiases(b2,h2Err);
 	b1=adjustBiases(b1,h1Err);
+}
+function applyDropout(l,r){
+	return l.map(e=>(Math.random()<r?0:e/(1-r)));
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
