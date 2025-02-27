@@ -108,11 +108,11 @@ function reluDeriv(x){
 }
 function softmax(arr){
 	let exp=arr.map(Math.exp);
-	let sum=exp.reduce((a,b)=>a+b);
+	let sum=exp.reduce((a,b)=>a+b,0);
 	return exp.map(v=>v/sum);
 }
 function matMul(vec,ws){
-	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j]));
+	return ws.map(x=>x.reduce((s,v,j)=>s+v*vec[j],0));
 }
 function predict(input){
 	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
@@ -143,7 +143,7 @@ function train(input,label){
 	b1=adjustBiases(b1,h1Err);
 }
 function applyDropout(l){
-	return l.map(e=>(Math.random()<dropRate?0:e/(1-dropRate)));
+	return l.map(e=>Math.random()<dropRate?0:e/(1-dropRate));
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
