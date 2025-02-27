@@ -58,7 +58,7 @@ ctx.fillStyle="#000";
 ctx.fillRect(0,0,280,280);
 let drawing=false;
 const outputSize=10;
-const hZ=[128,64];
+const hZ=[128,64,32];
 const learnRate=0.0001;
 let ep=0,splN=0;
 function randomMatrix(x,y){
@@ -70,24 +70,28 @@ function emptyArr(n){
 }
 let w1=randomMatrix(hZ[0],784);
 let w2=randomMatrix(hZ[1],hZ[0]);
-let w3=randomMatrix(outputSize,hZ[1]);
+let w3=randomMatrix(hZ[2],hZ[1]);
+let w4=randomMatrix(outputSize,hZ[2]);
 let b1=emptyArr(hZ[0]);
 let b2=emptyArr(hZ[1]);
-let b3=emptyArr(outputSize);
+let b3=emptyArr(hZ[2]);
+let b4=emptyArr(outputSize);
 let trainingData;
 async function fetctdata(){
-	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
+	let wandb=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/wandb.json"),td=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/training_data.json");
 	let d=await wandb.json();
 	trainingData=await td.json();
-	w1=d.w1;w2=d.w2;w3=d.w3;b1=d.b1;b2=d.b2;b3=d.b3;
+	w1=d.w1;w2=d.w2;w3=d.w3;w4=d.w4;b1=d.b1;b2=d.b2;b3=d.b3;b4=d.b4;
 }
 function resetWandB(){
 	w1=randomMatrix(hZ[0],784);
 	w2=randomMatrix(hZ[1],hZ[0]);
-	w3=randomMatrix(outputSize,hZ[1]);
+	w3=randomMatrix(hZ[2],hZ[1]);
+	w4=randomMatrix(outputSize,hZ[2]);
 	b1=emptyArr(hZ[0]);
 	b2=emptyArr(hZ[1]);
-	b3=emptyArr(outputSize);
+	b3=emptyArr(hZ[2]);
+	b4=emptyArr(outputSize);
 }
 fetctdata();
 // activation
@@ -111,23 +115,28 @@ function matMul(vec,ws){
 function predict(input){
 	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
 	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i]));
-	let o=matMul(h2,w3).map((v,i)=>v+b3[i]);
+	let h3=matMul(h2,w3).map((v,i)=>relu(v+b3[i]));
+	let o=matMul(h3,w4).map((v,i)=>v+b4[i]);
 	return softmax(o);
 }
 // training
 function train(input,label){
-	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i])); 
-	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i])); 
-	let out=softmax(matMul(h2,w3).map((v,i)=>v+b3[i]));
+	let h1=matMul(input,w1).map((v,i)=>relu(v+b1[i]));
+	let h2=matMul(h1,w2).map((v,i)=>relu(v+b2[i]));
+	let h3=matMul(h2,w3).map((v,i)=>relu(v+b3[i]));
+	let out=softmax(matMul(h3,w4).map((v,i)=>v+b4[i]));
 	let tg=emptyArr(outputSize);
 	tg[+label]=1;
 	let outErr=out.map((o,i)=>o-tg[i]);
-	let h2Err=matMul(outErr,transpose(w3)).map((h,i)=>h*reluDeriv(h2[i])); 
+	let h3Err=matMul(outErr,transpose(w4)).map((h,i)=>h*reluDeriv(h3[i])); 
+	let h2Err=matMul(h3Err,transpose(w3)).map((h,i)=>h*reluDeriv(h2[i])); 
 	let h1Err=matMul(h2Err,transpose(w2)).map((h,i)=>h*reluDeriv(h1[i])); 
-	w3=adjustWeights(w3,outErr,h2);
+	w4=adjustWeights(w4,outErr,h3);
+	w3=adjustWeights(w3,h3Err,h2);
 	w2=adjustWeights(w2,h2Err,h1);
 	w1=adjustWeights(w1,h1Err,input);
-	b3=adjustBiases(b3,outErr);
+	b4=adjustBiases(b4,outErr);
+	b3=adjustBiases(b3,h3Err);
 	b2=adjustBiases(b2,h2Err);
 	b1=adjustBiases(b1,h1Err);
 }
