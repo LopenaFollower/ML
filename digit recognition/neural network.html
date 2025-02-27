@@ -7,6 +7,7 @@
 		canvas{
 			border:2px solid #000;
 			touch-action:pinch-zoom;
+			user-select:none;
 		}
 		#cont{
 			padding-left:5px;
@@ -78,7 +79,7 @@ let b3=emptyArr(hZ[2]);
 let b4=emptyArr(outputSize);
 let trainingData;
 async function fetctdata(){
-	let wandb=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/wandb.json"),td=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/training_data.json");
+	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
 	let d=await wandb.json();
 	trainingData=await td.json();
 	w1=d.w1;w2=d.w2;w3=d.w3;w4=d.w4;b1=d.b1;b2=d.b2;b3=d.b3;b4=d.b4;
@@ -162,7 +163,7 @@ function trainLoop(){
 	epochs.innerText=ep+" iterations";
 }
 ["touchstart","mousedown"].forEach(v=>cvs.addEventListener(v,e=>drawing=true));
-["mouseup","mouseleave","mouseout","touchend","touchcancel"].forEach(v=>cvs.addEventListener(v,e=>drawing=false));
+["mouseup","touchend","touchcancel"].forEach(v=>window.addEventListener(v,e=>drawing=false));
 ["touchmove","mousemove"].forEach((v,i)=>cvs.addEventListener(v,e=>draw(e,i)));
 function draw(e,t){
 	if(!drawing)return;
@@ -171,6 +172,7 @@ function draw(e,t){
 	ctx.beginPath();
 	ctx.arc(tg.pageX-cvs.offsetLeft,tg.pageY-cvs.offsetTop,10,0,Math.PI*2);
 	ctx.fill();
+	predictBtn.click();
 }
 function seeWhatISee(px,c=scs){
 	let cx=c.getContext("2d");
