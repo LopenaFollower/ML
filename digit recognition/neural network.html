@@ -61,6 +61,7 @@ let drawing=false;
 const outputSize=10;
 const hZ=[128,64,32];
 const learnRate=0.0001;
+const dropRate=0.15;
 let ep=0,splN=0;
 function randomMatrix(x,y){
 	let scale=Math.sqrt(1/y);
@@ -122,9 +123,9 @@ function predict(input){
 }
 // training
 function train(input,label){
-	let h1=applyDropout(matMul(input,w1).map((v,i)=>relu(v+b1[i])),.2);
-	let h2=applyDropout(matMul(h1,w2).map((v,i)=>relu(v+b2[i])),.2);
-	let h3=applyDropout(matMul(h2,w3).map((v,i)=>relu(v+b3[i])),.2);
+	let h1=applyDropout(matMul(input,w1).map((v,i)=>relu(v+b1[i])));
+	let h2=applyDropout(matMul(h1,w2).map((v,i)=>relu(v+b2[i])));
+	let h3=applyDropout(matMul(h2,w3).map((v,i)=>relu(v+b3[i])));
 	let out=softmax(matMul(h3,w4).map((v,i)=>v+b4[i]));
 	let tg=emptyArr(outputSize);
 	tg[+label]=1;
@@ -141,8 +142,8 @@ function train(input,label){
 	b2=adjustBiases(b2,h2Err);
 	b1=adjustBiases(b1,h1Err);
 }
-function applyDropout(l,r){
-	return l.map(e=>(Math.random()<r?0:e/(1-r)));
+function applyDropout(l){
+	return l.map(e=>(Math.random()<dropRate?0:e/(1-dropRate)));
 }
 function transpose(mat){
 	return mat[0].map((_,i)=>mat.map(r=>r[i]));
