@@ -189,7 +189,7 @@ function displaySample(c){
 }
 updWaB.onclick=function(){
 	let link=document.createElement("a");
-	link.href=URL.createObjectURL(new Blob([JSON.stringify({w1,w2,w3,b1,b2,b3})],{type:"text/plain"}));
+	link.href=URL.createObjectURL(new Blob([JSON.stringify({w1,w2,w3,w4,b1,b2,b3,b4})],{type:"text/plain"}));
 	link.download="wandb.json";
 	link.click();
 	URL.revokeObjectURL(link.href);
@@ -223,6 +223,10 @@ addBtn.onclick=_=>{
 		navigator.clipboard.writeText(JSON.stringify(obj));
 	}
 }
+window.addEventListener("beforeunload",e=>{
+	e.preventDefault();
+	e.returnValue=true;
+});
 	</script>
 </body>
 </html>
