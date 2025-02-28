@@ -24,7 +24,7 @@
 		}
 		td{
 			text-align:center;
-			width:min(40px,calc(100%/9));
+			width:calc(100%/9);
 			height:40px;
 			font-size:90%;
 		}
@@ -80,7 +80,7 @@ let b3=emptyArr(hZ[2]);
 let b4=emptyArr(outputSize);
 let trainingData;
 async function fetctdata(){
-	let wandb=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/wandb.json"),td=await fetch("https://raw.githubusercontent.com/LopenaFollower/ML/refs/heads/main/digit%20recognition/training_data.json");
+	let wandb=await fetch("wandb.json"),td=await fetch("training_data.json");
 	let d=await wandb.json();
 	trainingData=await td.json();
 	w1=d.w1;w2=d.w2;w3=d.w3;w4=d.w4;b1=d.b1;b2=d.b2;b3=d.b3;b4=d.b4;
@@ -156,19 +156,19 @@ function adjustBiases(bs,e){
 }
 function trainNetwork(){
 	for(let i=0;i<trainingData.length;i++)train(trainingData[i].i,trainingData[i].l);
-	ep++;
 }
 function trainLoop(){
 	if(doTrain.checked){
 		trainNetwork();
 		setTimeout(trainLoop);
-		if(ep%5<1)predictBtn.click();
+		if(++ep%5<1)predictBtn.click();
 	}
 	epochs.innerText=ep+" iterations";
 }
 ["touchstart","mousedown"].forEach(v=>cvs.addEventListener(v,e=>drawing=true));
-["mouseup","touchend","touchcancel"].forEach(v=>window.addEventListener(v,e=>drawing=false));
+["mouseup","touchend","touchcancel"].forEach(v=>window.addEventListener(v,e=>predictBtn.click(drawing=false)));
 ["touchmove","mousemove"].forEach((v,i)=>cvs.addEventListener(v,e=>draw(e,i)));
+let di=0;
 function draw(e,t){
 	if(!drawing)return;
 	let tg=t?e:e.targetTouches.length?e.targetTouches.item(0):e.touches.item(0);
@@ -176,7 +176,13 @@ function draw(e,t){
 	ctx.beginPath();
 	ctx.arc(tg.pageX-cvs.offsetLeft,tg.pageY-cvs.offsetTop,10,0,Math.PI*2);
 	ctx.fill();
-	predictBtn.click();
+	if(++di%6<1)predictBtn.click();
+}
+function write(n){
+	ctx.font=230+"px sans-serif";
+	ctx.fillStyle="#fff";
+	let m=ctx.measureText(n);
+	ctx.fillText(n,(cvs.width-m.width)/2,(cvs.height+m.actualBoundingBoxAscent+m.actualBoundingBoxDescent)/2);
 }
 function seeWhatISee(px,c=scs){
 	let cx=c.getContext("2d");
@@ -219,10 +225,7 @@ addBtn.onclick=_=>{
 	for(let y=0;y<28;y++)for(let x=0;x<28;x++)gs.push(imgData.data[11200*y+40*x]/255);
 	navigator.clipboard.writeText(JSON.stringify({l:label,i:gs}));
 }
-window.addEventListener("beforeunload",e=>{
-	e.preventDefault();
-	e.returnValue=true;
-});
+window.addEventListener("beforeunload",e=>e.preventDefault(e.returnValue=true));
 	</script>
 </body>
 </html>
